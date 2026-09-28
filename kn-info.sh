@@ -6,7 +6,7 @@
 #  jq — необязателен: без него JSON разбирает awk, результат тот же.
 # ============================================================
 
-KN_INFO_VERSION="3.0.1"
+KN_INFO_VERSION="3.0.2"
 
 RCI_BASE="${KN_RCI_BASE:-http://127.0.0.1:79/rci}"   # не localhost: ndm слушает только IPv4
 CONF_FILE="${KN_CONF_FILE:-/opt/etc/kn-info.conf}"
@@ -515,7 +515,7 @@ IFROWS=$(printf '%s\n' "$IF" | awk -v gwif="$GW_IF" '
         }
     }')
 
-WIFI_LINE=""; P_UP=""; P_DN=""; RCI_TEMPS=""; WIFI_RCI=0; LTE_LINE=""
+WIFI_LINE=""; P_UP=""; P_DN=""; RCI_TEMPS=""; WIFI_T=""; WIFI_V=""; WIFI_RCI=0; LTE_LINE=""
 WAN_IP=""; WAN_IF=""; GWN_IP=""; GWN_IF=""
 while read -r tag a b c d; do
     case "$tag" in
@@ -525,7 +525,7 @@ while read -r tag a b c d; do
                 if isnum "$c"; then part="$part/${c}МГц"; elif [ "$c" != "-" ]; then part="$part/$c"; fi
             fi
             WIFI_LINE="${WIFI_LINE:+$WIFI_LINE  }$part" ;;
-        TW) RCI_TEMPS="$RCI_TEMPS $a=$b"; WIFI_RCI=1 ;;
+        TW) WIFI_T="$WIFI_T $a=$b"; WIFI_V="$WIFI_V $b"; WIFI_RCI=1 ;;
         T)  RCI_TEMPS="$RCI_TEMPS $a=$b" ;;
         M)  [ -n "$LTE_LINE" ] && continue
             [ "$a" != "-" ] && LTE_LINE="сигнал $a/5"
@@ -542,6 +542,14 @@ done <<EOF
 $IFROWS
 EOF
 [ -z "$WAN_IP" ] && { WAN_IP=$GWN_IP; WAN_IF=$GWN_IF; }
+# Радио на одном чипе (MT7981 и др.) отдают одну температуру — тогда одной строкой
+# shellcheck disable=SC2086
+set -- $WIFI_V
+if [ $# -gt 1 ]; then
+    same=1; for v in "$@"; do [ "$v" = "$1" ] || same=0; done
+    [ "$same" = 1 ] && WIFI_T=" Wi-Fi=$1"
+fi
+RCI_TEMPS="$WIFI_T$RCI_TEMPS"
 PORT_LINE=""
 [ -n "$P_UP" ] && PORT_LINE="${CG}▲${C0} $P_UP"
 [ -n "$P_DN" ] && PORT_LINE="${PORT_LINE:+$PORT_LINE  }${CD}▼ $P_DN${C0}"
