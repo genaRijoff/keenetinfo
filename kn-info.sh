@@ -6,7 +6,7 @@
 #  jq — необязателен: без него JSON разбирает awk, результат тот же.
 # ============================================================
 
-KN_INFO_VERSION="3.0.2"
+KN_INFO_VERSION="3.0.3"
 
 RCI_BASE="${KN_RCI_BASE:-http://127.0.0.1:79/rci}"   # не localhost: ndm слушает только IPv4
 CONF_FILE="${KN_CONF_FILE:-/opt/etc/kn-info.conf}"
@@ -640,7 +640,12 @@ row() { [ -n "$2" ] && say "${CC}$1${C0}$2"; }
 dot=" ${CD}·${C0} "
 jn() { J=""; for p in "$@"; do [ -n "$p" ] && J="${J:+$J$dot}$p"; done; }   # склейка через « · » в $J
 
-jn "${CW}${TITLE:-н/д}${C0}${SANDBOX:+ $SANDBOX}" "$RELEASE" "$BUILD" "${BOOT_SLOT:+слот $BOOT_SLOT}"; FW=$J
+if [ "$STYLE" = "full" ]; then      # канал и номер сборки — только в подробном виде
+    jn "${CW}${TITLE:-н/д}${C0}${SANDBOX:+ $SANDBOX}" "$RELEASE" "$BUILD" "${BOOT_SLOT:+слот $BOOT_SLOT}"
+else
+    jn "${CW}${TITLE:-н/д}${C0}" "$BUILD" "${BOOT_SLOT:+слот $BOOT_SLOT}"
+fi
+FW=$J
 jn "$SOC" "$ARCH${CORES:+ ×$CORES}" "${S_LOAD:+${S_LOAD}%}" "$FREQ";                                   CPU=$J
 jn "$INET" "${WAN_IP:+$WAN_IP}${WAN_IF:+ ${CD}($WAN_IF)${C0}}";                                        NETL=$J
 if [ "$STYLE" = "full" ]; then CL_STR="${CW}${CL_ON}${C0} онлайн / ${CL_ALL} всего"
