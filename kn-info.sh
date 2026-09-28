@@ -6,7 +6,7 @@
 #  jq — необязателен: без него JSON разбирает awk, результат тот же.
 # ============================================================
 
-KN_INFO_VERSION="3.0.0"
+KN_INFO_VERSION="3.0.1"
 
 RCI_BASE="${KN_RCI_BASE:-http://127.0.0.1:79/rci}"   # не localhost: ndm слушает только IPv4
 CONF_FILE="${KN_CONF_FILE:-/opt/etc/kn-info.conf}"
@@ -39,15 +39,21 @@ isnum() { case "$1" in ''|*[!0-9]*) return 1 ;; esac; return 0; }
 HAVE_JQ=0
 command -v jq >/dev/null 2>&1 && HAVE_JQ=1
 
-json_flat() {
+json_flat() {      # <файл с JSON>
     if [ "$HAVE_JQ" = "1" ] && [ -z "$KN_NO_JQ" ]; then
-        # Не paths(scalars): тот отбрасывает false и null («internet»: false)
-        jq -r 'paths as $p | getpath($p) as $v
+        # Не paths(scalars): тот отбрасывает false и null («internet»: false).
+        # Без gsub/test: jq в Entware бывает собран без регулярных выражений.
+        _jf=$(jq -r 'paths as $p | getpath($p) as $v
                | select(($v | type) != "object" and ($v | type) != "array")
                | ($p | map(tostring) | join("|")) + "="
-                 + ($v | tostring | gsub("[\n\r\t]"; " "))' 2>/dev/null
-        return
+                 + ($v | tostring | split("\n") | join(" ") | split("\r") | join(" ") | split("\t") | join(" "))' "$1" 2>/dev/null)
+        # jq не справился (старый, урезанный) — разбираем awk
+        if [ -n "$_jf" ]; then printf '%s\n' "$_jf"; return; fi
     fi
+    json_flat_awk < "$1"
+}
+
+json_flat_awk() {
     # Режем по кавычкам: чётные куски — строки, нечётные — разметка.
     # Посимвольно идёт только разметка без пробелов — это быстро и на MIPS.
     awk 'BEGIN { RS = "\001" }
@@ -220,7 +226,7 @@ rci() {
     [ "$RCI_CODE" = "200" ]
 }
 # rflat <endpoint> → плоский JSON в RFLAT
-rflat() { RFLAT=""; rci "$1" && RFLAT=$(json_flat < "$RCI_TMP"); }
+rflat() { RFLAT=""; rci "$1" && RFLAT=$(json_flat "$RCI_TMP"); }
 
 # ------------------------------------------------------------
 #  Режим: флаг > переменная окружения > конфиг > компактный
@@ -309,6 +315,11 @@ token_load
 
 rflat show/version; VER="$RFLAT"
 if [ -z "$VER" ]; then
+    if [ "$RCI_CODE" = "200" ]; then
+        say "${CR}[!] RCI ответил, но JSON не разобрался${C0}"
+        echo "    Пришли вывод: kss debug; head -c 300 $DEBUG_DIR/show_version.json; jq --version; awk 2>&1 | head -1"
+        exit 1
+    fi
     [ "$RCI_CODE" = "000" ] && RCI_CODE=""
     say "${CR}[!] RCI не отвечает: $RCI_BASE, код ${RCI_CODE:-нет ответа}${RCI_DETAIL:+ ($RCI_DETAIL)}${C0}"
     case "$RCI_CODE:$RCI_DETAIL" in
